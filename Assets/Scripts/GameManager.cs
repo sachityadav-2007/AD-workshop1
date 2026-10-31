@@ -11,6 +11,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Rules")]
     [SerializeField, Min(5f)] private float gameDuration = 60f;
+    [SerializeField, Min(1)] private int maxBombHits = 3;
 
     [Header("Difficulty")]
     [Tooltip("Difficulty added per coin collected.")]
@@ -28,6 +29,11 @@ public class GameManager : MonoBehaviour
     public bool IsNewBest { get; private set; }
     public float TimeRemaining { get; private set; }
     public float GameDuration => gameDuration;
+    public float ElapsedTime => gameDuration - TimeRemaining;
+
+    public int BombHits { get; private set; }
+    public int MaxBombHits => maxBombHits;
+    public bool EndedByBombs { get; private set; }
 
     /// <summary>1.0 at the start, rises with score and elapsed time, capped at maxDifficulty.</summary>
     public float Difficulty
@@ -41,6 +47,7 @@ public class GameManager : MonoBehaviour
 
     public event Action<GameState> StateChanged;
     public event Action<int> ScoreChanged;
+    public event Action<int, int> BombHitsChanged;
 
     private void Awake()
     {
@@ -67,6 +74,7 @@ public class GameManager : MonoBehaviour
         if (TimeRemaining <= 0f)
         {
             TimeRemaining = 0f;
+            EndedByBombs = false;
             EndGame();
         }
     }
@@ -74,9 +82,12 @@ public class GameManager : MonoBehaviour
     public void StartGame()
     {
         Score = 0;
+        BombHits = 0;
+        EndedByBombs = false;
         IsNewBest = false;
         TimeRemaining = gameDuration;
         ScoreChanged?.Invoke(Score);
+        BombHitsChanged?.Invoke(BombHits, maxBombHits);
         SetState(GameState.Playing);
     }
 
@@ -87,11 +98,26 @@ public class GameManager : MonoBehaviour
         ScoreChanged?.Invoke(Score);
     }
 
+    public void HitBomb()
+    {
+        if (State != GameState.Playing) return;
+        BombHits++;
+        BombHitsChanged?.Invoke(BombHits, maxBombHits);
+        if (BombHits >= maxBombHits)
+        {
+            EndedByBombs = true;
+            EndGame();
+        }
+    }
+
     public void ReturnToMenu()
     {
         Score = 0;
+        BombHits = 0;
+        EndedByBombs = false;
         TimeRemaining = gameDuration;
         ScoreChanged?.Invoke(Score);
+        BombHitsChanged?.Invoke(BombHits, maxBombHits);
         SetState(GameState.MainMenu);
     }
 
