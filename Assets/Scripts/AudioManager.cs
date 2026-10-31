@@ -13,6 +13,7 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioClip coinClip;
     [SerializeField] private AudioClip clickClip;
     [SerializeField] private AudioClip gameOverClip;
+    [SerializeField] private AudioClip explosionClip;
     [SerializeField] private AudioClip musicClip;
 
     [Header("Volume")]
@@ -43,6 +44,7 @@ public class AudioManager : MonoBehaviour
         if (coinClip == null) coinClip = BuildClip("Coin", new[] { Midi(83), Midi(88) }, 0.12f, 0.6f, 10f, true);
         if (clickClip == null) clickClip = BuildClip("Click", new[] { Midi(79) }, 0.06f, 0.5f, 30f, false);
         if (gameOverClip == null) gameOverClip = BuildClip("GameOver", new[] { Midi(67), Midi(64), Midi(60), Midi(55) }, 0.3f, 0.6f, 4f, true);
+        if (explosionClip == null) explosionClip = BuildExplosionClip();
         if (musicClip == null) musicClip = BuildMusic();
     }
 
@@ -72,6 +74,12 @@ public class AudioManager : MonoBehaviour
     {
         sfxSource.pitch = 1f;
         sfxSource.PlayOneShot(gameOverClip, sfxVolume);
+    }
+
+    public void PlayExplosion()
+    {
+        sfxSource.pitch = Random.Range(0.9f, 1.1f);
+        sfxSource.PlayOneShot(explosionClip, sfxVolume);
     }
 
     public void PlayMusic()
@@ -141,5 +149,37 @@ public class AudioManager : MonoBehaviour
                 notes[index++] = Midi(chord[step]);
 
         return BuildClip("Music", notes, 0.2f, 0.5f, 5f, true);
+    }
+
+    private static AudioClip BuildExplosionClip()
+    {
+        const float duration = 0.7f;
+        int totalSamples = Mathf.RoundToInt(duration * SampleRate);
+        float[] data = new float[totalSamples];
+        float lastNoise = 0f;
+        float phase = 0f;
+
+        for (int i = 0; i < totalSamples; i++)
+        {
+            float t = i / (float)SampleRate;
+            float progress = t / duration;
+
+            // Low-passed noise
+            float white = Random.Range(-1f, 1f);
+            lastNoise = Mathf.Lerp(lastNoise, white, 0.18f);
+
+            // Falling-pitch sine wave (approx 140Hz falling down to 30Hz)
+            float freq = Mathf.Lerp(140f, 30f, Mathf.Sqrt(progress));
+            phase += 2f * Mathf.PI * freq / SampleRate;
+            float sine = Mathf.Sin(phase);
+
+            // Fast attack, exponential decay envelope
+            float env = Mathf.Exp(-4.2f * t) * Mathf.Clamp01(i / (float)(0.003f * SampleRate));
+            data[i] = (lastNoise * 0.7f + sine * 0.5f) * env * 0.95f;
+        }
+
+        AudioClip clip = AudioClip.Create("Explosion", data.Length, 1, SampleRate, false);
+        clip.SetData(data, 0);
+        return clip;
     }
 }
