@@ -14,6 +14,7 @@ public class UIManager : MonoBehaviour
     [Header("HUD")]
     [SerializeField] private TMP_Text scoreText;
     [SerializeField] private TMP_Text timerText;
+    [SerializeField] private TMP_Text bombsText;
     [SerializeField] private Color timerNormalColor = Color.white;
     [SerializeField] private Color timerWarningColor = new Color(1f, 0.35f, 0.35f);
     [SerializeField] private int warningSeconds = 10;
@@ -21,6 +22,7 @@ public class UIManager : MonoBehaviour
     [Header("Game Over")]
     [SerializeField] private TMP_Text finalScoreText;
     [SerializeField] private TMP_Text bestScoreText;
+    [SerializeField] private TMP_Text gameOverReasonText;
 
     [Header("Buttons")]
     [SerializeField] private Button startButton;
@@ -48,8 +50,10 @@ public class UIManager : MonoBehaviour
         }
         gm.StateChanged += HandleStateChanged;
         gm.ScoreChanged += HandleScoreChanged;
+        gm.BombHitsChanged += HandleBombHitsChanged;
         HandleStateChanged(gm.State);
         HandleScoreChanged(gm.Score);
+        HandleBombHitsChanged(gm.BombHits, gm.MaxBombHits);
     }
 
     private void OnDestroy()
@@ -58,6 +62,7 @@ public class UIManager : MonoBehaviour
         {
             GameManager.Instance.StateChanged -= HandleStateChanged;
             GameManager.Instance.ScoreChanged -= HandleScoreChanged;
+            GameManager.Instance.BombHitsChanged -= HandleBombHitsChanged;
         }
     }
 
@@ -117,6 +122,9 @@ public class UIManager : MonoBehaviour
                 timerText.rectTransform.localScale = Vector3.one;
                 timerText.color = timerNormalColor;
             }
+            GameManager gm = GameManager.Instance;
+            if (bombsText != null && gm != null)
+                bombsText.text = "Bombs: " + gm.BombHits + "/" + gm.MaxBombHits;
         }
         else if (state == GameState.GameOver)
         {
@@ -124,6 +132,12 @@ public class UIManager : MonoBehaviour
             if (finalScoreText != null) finalScoreText.text = "Final Score: " + gm.Score;
             if (bestScoreText != null)
                 bestScoreText.text = gm.IsNewBest ? "NEW BEST: " + gm.BestScore + "!" : "Best: " + gm.BestScore;
+            if (gameOverReasonText != null && gm != null)
+            {
+                gameOverReasonText.text = gm.EndedByBombs
+                    ? "BOOM! You caught " + gm.MaxBombHits + " bombs!"
+                    : "Time's up!";
+            }
         }
     }
 
@@ -136,6 +150,16 @@ public class UIManager : MonoBehaviour
         {
             if (punchRoutine != null) StopCoroutine(punchRoutine);
             punchRoutine = StartCoroutine(Punch(scoreText.rectTransform));
+        }
+    }
+
+    private void HandleBombHitsChanged(int hits, int maxHits)
+    {
+        if (bombsText == null) return;
+        bombsText.text = "Bombs: " + hits + "/" + maxHits;
+        if (hits > 0)
+        {
+            StartCoroutine(Punch(bombsText.rectTransform));
         }
     }
 
