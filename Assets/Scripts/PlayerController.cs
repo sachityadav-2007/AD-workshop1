@@ -22,6 +22,7 @@ public class PlayerController : MonoBehaviour
     private float velocityX;
     private Vector3 baseScale;
     private Coroutine catchRoutine;
+    private Coroutine hitRoutine;
 
     private void Awake()
     {
@@ -70,7 +71,7 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (cam == null) cam = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+        if (cam == null) cam = Camera.main;
         if (cam == null || rb == null) return;
 
         float camHalfWidth = cam.orthographicSize * cam.aspect;
@@ -102,7 +103,7 @@ public class PlayerController : MonoBehaviour
 
     public void ResetPosition()
     {
-        if (cam == null) cam = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+        if (cam == null) cam = Camera.main;
         if (cam == null || rb == null) return;
 
         float y = cam.transform.position.y - cam.orthographicSize + bottomMargin + halfHeight;
@@ -110,6 +111,8 @@ public class PlayerController : MonoBehaviour
         transform.position = pos;
         rb.position = pos;
         velocityX = 0f;
+        if (hitRoutine != null) StopCoroutine(hitRoutine);
+        if (sprite != null) sprite.color = Color.white;
     }
 
     /// <summary>Small squash-and-stretch when a coin is caught.</summary>
@@ -130,5 +133,27 @@ public class PlayerController : MonoBehaviour
             yield return null;
         }
         transform.localScale = baseScale;
+    }
+
+    /// <summary>Flashes the basket red when a bomb is caught.</summary>
+    public void PlayHitAnimation()
+    {
+        if (hitRoutine != null) StopCoroutine(hitRoutine);
+        hitRoutine = StartCoroutine(HitRoutine());
+    }
+
+    private IEnumerator HitRoutine()
+    {
+        if (sprite == null) yield break;
+        Color original = Color.white;
+        Color hitColor = new Color(1f, 0.25f, 0.25f);
+        const float duration = 0.35f;
+        for (float t = 0f; t < duration; t += Time.deltaTime)
+        {
+            float k = Mathf.Sin(t / duration * Mathf.PI);
+            sprite.color = Color.Lerp(original, hitColor, k);
+            yield return null;
+        }
+        sprite.color = original;
     }
 }
