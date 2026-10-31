@@ -17,12 +17,24 @@ public static class CoinCatcherSetup
     [MenuItem("Coin Catcher/Build Game Scene")]
     public static void Build()
     {
+        ExecuteBuild(true);
+    }
+
+    public static void ExecuteBuild(bool showDialog = false)
+    {
         if (TMP_Settings.defaultFontAsset == null)
         {
-            EditorUtility.DisplayDialog("TextMeshPro needed",
-                "Please import TMP Essentials first:\nWindow > TextMeshPro > Import TMP Essential Resources.\nThen run this menu again.",
-                "OK");
-            return;
+            var fallbackFont = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
+            if (fallbackFont == null)
+            {
+                if (showDialog)
+                    EditorUtility.DisplayDialog("TextMeshPro needed",
+                        "Please import TMP Essentials first:\nWindow > TextMeshPro > Import TMP Essential Resources.\nThen run this menu again.",
+                        "OK");
+                else
+                    Debug.LogWarning("TextMeshPro essentials needed before building GameScene.");
+                return;
+            }
         }
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
@@ -32,6 +44,7 @@ public static class CoinCatcherSetup
 
         // ---------- Sprites ----------
         Sprite coinSprite = SaveSprite(MakeCoinTexture(), "Assets/Sprites/Coin.png", 128f, Vector4.zero);
+        Sprite bombSprite = SaveSprite(MakeBombTexture(), "Assets/Sprites/Bomb.png", 128f, Vector4.zero);
         Sprite basketSprite = SaveSprite(MakeBasketTexture(), "Assets/Sprites/Basket.png", 128f, Vector4.zero);
         Sprite backgroundSprite = SaveSprite(MakeBackgroundTexture(), "Assets/Sprites/Background.png", 100f, Vector4.zero);
         Sprite particleSprite = SaveSprite(MakeParticleTexture(), "Assets/Sprites/Particle.png", 32f, Vector4.zero);
@@ -44,19 +57,24 @@ public static class CoinCatcherSetup
 
         // ---------- Prefabs ----------
         GameObject effectPrefab = BuildEffectPrefab(particleMat);
+        GameObject bombEffectPrefab = BuildBombExplosionPrefab(particleMat);
         GameObject coinPrefab = BuildCoinPrefab(coinSprite, spriteMat, effectPrefab);
+        GameObject bombPrefab = BuildBombPrefab(bombSprite, spriteMat, bombEffectPrefab);
         GameObject basketPrefab = BuildBasketPrefab(basketSprite, spriteMat);
 
         // ---------- Scene ----------
-        Scene_Build(backgroundSprite, spriteMat, roundedSprite, coinPrefab, basketPrefab);
+        Scene_Build(backgroundSprite, spriteMat, roundedSprite, coinPrefab, bombPrefab, basketPrefab);
 
-        EditorUtility.DisplayDialog("Coin Catcher", "Game scene built and saved to " + ScenePath + ".\nPress Play!", "OK");
+        if (showDialog)
+            EditorUtility.DisplayDialog("Coin Catcher", "Game scene built and saved to " + ScenePath + ".\nPress Play!", "OK");
+        else
+            Debug.Log("Coin Catcher: Game scene built and saved to " + ScenePath);
     }
 
     // =====================================================================
     // Scene
     // =====================================================================
-    private static void Scene_Build(Sprite bg, Material spriteMat, Sprite rounded, GameObject coinPrefab, GameObject basketPrefab)
+    private static void Scene_Build(Sprite bg, Material spriteMat, Sprite rounded, GameObject coinPrefab, GameObject bombPrefab, GameObject basketPrefab)
     {
         var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
 
@@ -92,6 +110,7 @@ public static class CoinCatcherSetup
         var spawnerGo = new GameObject("CoinSpawner");
         var spawner = spawnerGo.AddComponent<CoinSpawner>();
         SetRef(spawner, "coinPrefab", coinPrefab.GetComponent<Coin>());
+        SetRef(spawner, "bombPrefab", bombPrefab.GetComponent<Bomb>());
 
         // UI
         BuildUI(rounded);
@@ -141,16 +160,20 @@ public static class CoinCatcherSetup
         Anchor(score.rectTransform, new Vector2(0f, 1f), new Vector2(50f, -30f), new Vector2(700f, 110f));
         var timer = MakeText(hud.transform, "TimerText", "Time: 60", 70f, Color.white, FontStyles.Bold, TextAlignmentOptions.Right);
         Anchor(timer.rectTransform, new Vector2(1f, 1f), new Vector2(-50f, -30f), new Vector2(700f, 110f));
+        var bombs = MakeText(hud.transform, "BombsText", "Bombs: 0/3", 64f, new Color(1f, 0.4f, 0.4f), FontStyles.Bold, TextAlignmentOptions.Center);
+        Anchor(bombs.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -30f), new Vector2(500f, 110f));
 
         // ----- Game over -----
         GameObject over = MakePanel(canvasGo.transform, "GameOverPanel", new Color(0f, 0f, 0f, 0.65f));
         MakeCard(over.transform, rounded, new Vector2(1100f, 960f), new Color(0.12f, 0.07f, 0.3f, 0.92f));
         var overTitle = MakeText(over.transform, "GameOverTitle", "GAME OVER", 130f, new Color(1f, 0.35f, 0.35f), FontStyles.Bold);
         Anchor(overTitle.rectTransform, center, new Vector2(0f, 330f), new Vector2(1000f, 200f));
+        var reason = MakeText(over.transform, "ReasonText", "Time's up!", 50f, new Color(1f, 0.85f, 0.3f), FontStyles.Normal);
+        Anchor(reason.rectTransform, center, new Vector2(0f, 230f), new Vector2(1000f, 80f));
         var finalScore = MakeText(over.transform, "FinalScoreText", "Final Score: 0", 80f, Color.white, FontStyles.Bold);
-        Anchor(finalScore.rectTransform, center, new Vector2(0f, 150f), new Vector2(1000f, 120f));
+        Anchor(finalScore.rectTransform, center, new Vector2(0f, 135f), new Vector2(1000f, 120f));
         var best = MakeText(over.transform, "BestScoreText", "Best: 0", 54f, gold, FontStyles.Normal);
-        Anchor(best.rectTransform, center, new Vector2(0f, 40f), new Vector2(1000f, 90f));
+        Anchor(best.rectTransform, center, new Vector2(0f, 35f), new Vector2(1000f, 90f));
         Button restartButton = MakeButton(over.transform, "RestartButton", "RESTART", new Vector2(0f, -140f), new Vector2(560f, 130f), new Color(0.2f, 0.8f, 0.4f), rounded);
         Button menuButton = MakeButton(over.transform, "MainMenuButton", "MAIN MENU", new Vector2(0f, -300f), new Vector2(560f, 130f), new Color(0.25f, 0.55f, 1f), rounded);
 
@@ -163,8 +186,10 @@ public static class CoinCatcherSetup
         SetRef(ui, "gameOverPanel", over);
         SetRef(ui, "scoreText", score);
         SetRef(ui, "timerText", timer);
+        SetRef(ui, "bombsText", bombs);
         SetRef(ui, "finalScoreText", finalScore);
         SetRef(ui, "bestScoreText", best);
+        SetRef(ui, "gameOverReasonText", reason);
         SetRef(ui, "startButton", startButton);
         SetRef(ui, "restartButton", restartButton);
         SetRef(ui, "mainMenuButton", menuButton);
@@ -221,6 +246,54 @@ public static class CoinCatcherSetup
         return prefab;
     }
 
+    private static GameObject BuildBombExplosionPrefab(Material particleMat)
+    {
+        var fx = new GameObject("BombExplosionEffect");
+        var ps = fx.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        var main = ps.main;
+        main.duration = 0.7f;
+        main.loop = false;
+        main.playOnAwake = true;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.4f, 0.8f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(3.5f, 8f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.2f, 0.55f);
+        main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.25f, 0.05f), new Color(1f, 0.85f, 0.1f));
+        main.gravityModifier = 0.8f;
+        main.maxParticles = 60;
+        main.stopAction = ParticleSystemStopAction.Destroy;
+
+        var emission = ps.emission;
+        emission.rateOverTime = 0f;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 30) });
+
+        var shape = ps.shape;
+        shape.enabled = true;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.2f;
+
+        var colorOverLifetime = ps.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        var gradient = new Gradient();
+        gradient.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(0.2f, 0.2f, 0.2f), 1f) },
+            new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+        colorOverLifetime.color = new ParticleSystem.MinMaxGradient(gradient);
+
+        var sizeOverLifetime = ps.sizeOverLifetime;
+        sizeOverLifetime.enabled = true;
+        sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0f));
+
+        var psr = fx.GetComponent<ParticleSystemRenderer>();
+        psr.sharedMaterial = particleMat;
+        psr.sortingOrder = 25;
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(fx, "Assets/Prefabs/BombExplosionEffect.prefab");
+        Object.DestroyImmediate(fx);
+        return prefab;
+    }
+
     private static GameObject BuildCoinPrefab(Sprite sprite, Material mat, GameObject effectPrefab)
     {
         var root = new GameObject("Coin");
@@ -246,6 +319,35 @@ public static class CoinCatcherSetup
         SetRef(coin, "collectEffectPrefab", effectPrefab);
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, "Assets/Prefabs/Coin.prefab");
+        Object.DestroyImmediate(root);
+        return prefab;
+    }
+
+    private static GameObject BuildBombPrefab(Sprite sprite, Material mat, GameObject effectPrefab)
+    {
+        var root = new GameObject("Bomb");
+
+        var rb = root.AddComponent<Rigidbody2D>();
+        rb.bodyType = RigidbodyType2D.Dynamic;
+        rb.gravityScale = 0f;
+
+        var col = root.AddComponent<CircleCollider2D>();
+        col.isTrigger = true;
+        col.radius = 0.4f;
+
+        var visual = new GameObject("Visual");
+        visual.transform.SetParent(root.transform, false);
+        visual.transform.localScale = Vector3.one * 0.9f;
+        var sr = visual.AddComponent<SpriteRenderer>();
+        sr.sprite = sprite;
+        sr.sharedMaterial = mat;
+        sr.sortingOrder = 6;
+
+        var bomb = root.AddComponent<Bomb>();
+        SetRef(bomb, "visual", visual.transform);
+        SetRef(bomb, "explosionEffectPrefab", effectPrefab);
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, "Assets/Prefabs/Bomb.prefab");
         Object.DestroyImmediate(root);
         return prefab;
     }
@@ -466,6 +568,112 @@ public static class CoinCatcherSetup
                     c = Color.Lerp(c, Color.white, h * 0.55f);
                 }
                 c.a = a;
+                px[y * S + x] = c;
+            }
+        }
+        tex.SetPixels(px);
+        tex.Apply();
+        return tex;
+    }
+
+    private static Texture2D MakeBombTexture()
+    {
+        const int S = 128;
+        Texture2D tex = NewTexture(S, S);
+        var px = new Color[S * S];
+        float cx = S * 0.5f;
+        float cy = S * 0.44f;
+        float R = S * 0.36f;
+
+        Color darkBody = new Color(0.12f, 0.12f, 0.16f);
+        Color lightBody = new Color(0.28f, 0.28f, 0.35f);
+        Color redStripe = new Color(0.95f, 0.18f, 0.22f);
+        Color capColor = new Color(0.35f, 0.35f, 0.42f);
+        Color fuseColor = new Color(0.85f, 0.72f, 0.55f);
+        Color sparkYellow = new Color(1f, 0.95f, 0.25f);
+        Color sparkOrange = new Color(1f, 0.45f, 0.05f);
+
+        Vector2 sparkPos = new Vector2(cx + 26f, cy + R + 26f);
+
+        for (int y = 0; y < S; y++)
+        {
+            for (int x = 0; x < S; x++)
+            {
+                float px_x = x + 0.5f;
+                float px_y = y + 0.5f;
+                float dx = px_x - cx;
+                float dy = px_y - cy;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+
+                Color c = Color.clear;
+
+                // 1. Bomb Sphere Body
+                if (d <= R + 1f)
+                {
+                    float a = Mathf.Clamp01(R - d + 0.5f);
+                    float v = (dy / R + 1f) * 0.5f;
+                    Color body = Color.Lerp(darkBody, lightBody, v);
+
+                    // Red stripe around equator
+                    if (Mathf.Abs(dy) < R * 0.26f)
+                    {
+                        float stripeV = Mathf.Clamp01((dy / (R * 0.26f) + 1f) * 0.5f);
+                        body = Color.Lerp(redStripe * 0.75f, redStripe, stripeV);
+                    }
+
+                    // Rim shadow
+                    if (d > R * 0.82f)
+                    {
+                        body = Color.Lerp(body, Color.black, 0.45f);
+                    }
+
+                    // Specular highlight on top-left
+                    float highlight = Mathf.Clamp01(1f - Vector2.Distance(new Vector2(dx, dy), new Vector2(-R * 0.38f, R * 0.38f)) / (R * 0.32f));
+                    body = Color.Lerp(body, Color.white, highlight * 0.65f);
+
+                    body.a = a;
+                    c = body;
+                }
+
+                // 2. Collar / Cap on top of sphere
+                if (px_y >= cy + R - 3f && px_y <= cy + R + 9f && Mathf.Abs(dx) <= 9f)
+                {
+                    float capA = Mathf.Clamp01(9f - Mathf.Abs(dx));
+                    Color cap = capColor;
+                    if (Mathf.Abs(dx) < 6f) cap = Color.Lerp(capColor, Color.white, 0.25f);
+                    cap.a = capA;
+                    c = Color.Lerp(c, cap, capA);
+                }
+
+                // 3. Curved Fuse
+                float fuseT = Mathf.Clamp01((px_y - (cy + R + 6f)) / 22f);
+                if (px_y >= cy + R + 6f && px_y <= sparkPos.y + 2f)
+                {
+                    float targetX = cx + fuseT * 26f + Mathf.Sin(fuseT * Mathf.PI) * 4f;
+                    float distToFuse = Mathf.Abs(px_x - targetX);
+                    if (distToFuse <= 2.2f)
+                    {
+                        float fuseA = Mathf.Clamp01(2.2f - distToFuse);
+                        Color fCol = (y % 4 < 2) ? fuseColor : fuseColor * 0.75f;
+                        fCol.a = fuseA;
+                        c = Color.Lerp(c, fCol, fuseA);
+                    }
+                }
+
+                // 4. Spark at the tip of the fuse
+                float distSpark = Vector2.Distance(new Vector2(px_x, px_y), sparkPos);
+                if (distSpark <= 8f)
+                {
+                    float sparkA = Mathf.Clamp01((8f - distSpark) / 5f);
+                    float angle = Mathf.Atan2(px_y - sparkPos.y, px_x - sparkPos.x);
+                    float rays = 0.65f + 0.35f * Mathf.Cos(angle * 6f);
+                    sparkA *= rays;
+                    Color spk = Color.Lerp(sparkOrange, sparkYellow, Mathf.Clamp01(1f - distSpark / 5f));
+                    if (distSpark < 2.5f) spk = Color.white;
+                    spk.a = Mathf.Clamp01(sparkA * 1.5f);
+                    c = Color.Lerp(c, spk, spk.a);
+                }
+
                 px[y * S + x] = c;
             }
         }
